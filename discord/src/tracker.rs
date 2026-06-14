@@ -2,21 +2,10 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use log::info;
+use poise::serenity_prelude as serenity;
 use scraper::{ElementRef, Html, Node, Selector};
-use serenity::all::{
-    ActionRowComponent, ComponentInteraction, CreateInputText, CreateModal, InputTextStyle,
-    ModalInteractionCollector,
-};
-use serenity::async_trait;
-use serenity::builder::{
-    CreateActionRow, CreateButton, CreateEmbed, CreateEmbedFooter, CreateInteractionResponse,
-    CreateInteractionResponseMessage, CreateMessage, EditMessage,
-};
-use serenity::model::Color;
-use serenity::model::application::{ButtonStyle, Interaction};
-use serenity::model::channel::Message;
-use serenity::model::gateway::Ready;
-use serenity::prelude::*;
+
+use crate::Context;
 
 #[derive(Debug)]
 pub struct TrackerConfig {
@@ -110,16 +99,20 @@ impl Tracker {
     const FOOTER_TEXT: &str = "Made by botmert ♡";
     const FOOTER_ICON: &str = "https://i.imgur.com/8uTFXwR.png"; // my cat
 
-    fn get_footer() -> CreateEmbedFooter {
-        CreateEmbedFooter::new(Self::FOOTER_TEXT).icon_url(Self::FOOTER_ICON)
+    fn get_footer() -> serenity::CreateEmbedFooter {
+        serenity::CreateEmbedFooter::new(Self::FOOTER_TEXT).icon_url(Self::FOOTER_ICON)
     }
 
-    fn build_embed(&self, results: &Vec<SearchResult>, page: usize) -> anyhow::Result<CreateEmbed> {
+    fn build_embed(
+        &self,
+        results: &[SearchResult<'_>],
+        page: usize,
+    ) -> anyhow::Result<serenity::CreateEmbed> {
         let result = results
             .get(page)
             .ok_or_else(|| anyhow!("Index out of bounds. {page}"))?;
 
-        Ok(CreateEmbed::new()
+        Ok(serenity::CreateEmbed::new()
             .title(result.name_clean)
             .description(result.name_extra.unwrap_or(""))
             .fields(
@@ -143,55 +136,59 @@ impl Tracker {
     const BTN_FIRST: &str = "page_first";
     const BTN_LAST: &str = "page_last";
 
-    fn create_nav_row(page: usize, total_pages: usize, disabled: bool) -> CreateActionRow {
+    fn create_nav_row(
+        page: usize,
+        total_pages: usize,
+        disabled: bool,
+    ) -> serenity::CreateActionRow {
         let at_first = disabled || page == 0;
         let at_last = disabled || page + 1 >= total_pages;
 
-        CreateActionRow::Buttons(vec![
-            CreateButton::new(Self::BTN_FIRST)
+        serenity::CreateActionRow::Buttons(vec![
+            serenity::CreateButton::new(Self::BTN_FIRST)
                 .label("First")
-                .style(ButtonStyle::Secondary)
+                .style(serenity::ButtonStyle::Secondary)
                 .disabled(at_first),
-            CreateButton::new(Self::BTN_PREV)
+            serenity::CreateButton::new(Self::BTN_PREV)
                 .label("Last")
-                .style(ButtonStyle::Secondary)
+                .style(serenity::ButtonStyle::Secondary)
                 .disabled(at_first),
-            CreateButton::new(Self::BTN_CHOOSE)
+            serenity::CreateButton::new(Self::BTN_CHOOSE)
                 .label(format!("{page}/{total_pages}", page = page + 1))
-                .style(ButtonStyle::Secondary)
+                .style(serenity::ButtonStyle::Secondary)
                 .disabled(disabled),
-            CreateButton::new(Self::BTN_LAST)
+            serenity::CreateButton::new(Self::BTN_LAST)
                 .label("Last")
-                .style(ButtonStyle::Secondary)
+                .style(serenity::ButtonStyle::Secondary)
                 .disabled(at_last),
-            CreateButton::new(Self::BTN_NEXT)
+            serenity::CreateButton::new(Self::BTN_NEXT)
                 .label("Next")
-                .style(ButtonStyle::Secondary)
+                .style(serenity::ButtonStyle::Secondary)
                 .disabled(at_last),
         ])
     }
 
-    fn enabled_nav_row(page: usize, total_pages: usize) -> CreateActionRow {
+    fn enabled_nav_row(page: usize, total_pages: usize) -> serenity::CreateActionRow {
         Self::create_nav_row(page, total_pages, false)
     }
 
-    fn disabled_nav_row() -> CreateActionRow {
+    fn disabled_nav_row() -> serenity::CreateActionRow {
         Self::create_nav_row(0, 0, true)
     }
 
     const MODAL_CHOOSE: &str = "modal_choose";
-    
-    pub async fn send_modal(
+
+    pub async fn send_modal<'a>(
         &self,
-        ctx: &Context,
+        ctx: Context<'a>,
         interaction: &serenity::model::application::ComponentInteraction,
         total_pages: usize,
     ) -> Result<Option<usize>> {
         let field_id = format!("modal_page_{}", interaction.id);
 
-        let modal = CreateModal::new(Self::MODAL_CHOOSE, "Choose Page").components(vec![
-            CreateActionRow::InputText(
-                CreateInputText::new(InputTextStyle::Short, "Page", &field_id)
+        let modal = serenity::CreateModal::new(Self::MODAL_CHOOSE, "Choose Page").components(vec![
+            serenity::CreateActionRow::InputText(
+                serenity::CreateInputText::new(serenity::InputTextStyle::Short, "Page", &field_id)
                     .placeholder("e.g. 1")
                     .min_length(1)
                     .max_length(6)
@@ -200,12 +197,15 @@ impl Tracker {
         ]);
 
         interaction
-            .create_response(&ctx.http, CreateInteractionResponse::Modal(modal))
+            .create_response(
+                ctx.http(),
+                serenity::CreateInteractionResponse::Modal(modal),
+            )
             .await?;
 
         let Some(submit) = interaction
             .message
-            .await_modal_interaction(&ctx.shard)
+            .await_modal_interaction(ctx)
             .author_id(interaction.user.id)
             .custom_ids(vec![Self::MODAL_CHOOSE.to_string()])
             .timeout(Duration::from_secs(300))
@@ -220,8 +220,7 @@ impl Tracker {
             .iter()
             .flat_map(|row| row.components.iter())
             .find_map(|component| match component {
-                ActionRowComponent::InputText(input) if input.custom_id == field_id =>
-                {
+                serenity::ActionRowComponent::InputText(input) if input.custom_id == field_id => {
                     input.value.as_deref()
                 }
                 _ => None,
@@ -236,71 +235,77 @@ impl Tracker {
         if page_1_based == 0 || page_1_based > total_pages {
             submit
                 .create_response(
-                    &ctx.http,
-                    CreateInteractionResponse::Message(
-                        CreateInteractionResponseMessage::new()
+                    ctx.http(),
+                    serenity::CreateInteractionResponse::Message(
+                        serenity::CreateInteractionResponseMessage::new()
                             .content(format!("Page must be between 1 and {total_pages}."))
                             .ephemeral(true),
                     ),
                 )
                 .await?;
-
             Ok(None)
         } else {
             submit
-                .create_response(&ctx.http, CreateInteractionResponse::Acknowledge)
+                .create_response(ctx.http(), serenity::CreateInteractionResponse::Acknowledge)
                 .await?;
             Ok(Some(page_1_based - 1))
         }
     }
 
-    // TODO: Poise
-    pub async fn send_embed(
+    pub async fn send_embed<'a>(
         &self,
-        ctx: &Context,
-        msg: &Message,
+        ctx: Context<'a>,
         query: &str,
-        results: &Vec<SearchResult<'_>>,
-    ) -> anyhow::Result<()> {
+        results: &[SearchResult<'_>],
+    ) -> Result<()> {
         let total_pages = results.len();
         let mut page = 0usize;
 
         if results.is_empty() {
-            let error = CreateEmbed::new()
+            let error = serenity::CreateEmbed::new()
                 .title("Error")
                 .description(format!("No result found for \"{query}\""))
-                .color(Color::RED)
+                .color(serenity::Color::RED)
                 .footer(Self::get_footer());
 
-            msg.channel_id
-                .send_message(&ctx.http, CreateMessage::new().embed(error))
-                .await?;
+            ctx.send(
+                poise::CreateReply::default()
+                    .reply(true)
+                    .allowed_mentions(serenity::CreateAllowedMentions::new().replied_user(false))
+                    .embed(error),
+            )
+            .await?;
 
             return Ok(());
         }
 
-        let mut search_msg = msg
-            .channel_id
-            .send_message(
-                &ctx.http,
-                CreateMessage::new()
+        let ctx_id = ctx.id();
+
+        let reply = ctx
+            .send(
+                poise::CreateReply::default()
+                    .reply(true)
+                    .allowed_mentions(serenity::CreateAllowedMentions::new().replied_user(false))
                     .embed(self.build_embed(results, page)?)
                     .components(vec![Self::enabled_nav_row(page, total_pages)]),
             )
             .await?;
 
+        let mut search_msg = reply.into_message().await?;
+
         loop {
-            let Some(interaction) = search_msg
-                .await_component_interaction(&ctx.shard)
-                .timeout(Duration::from_mins(10))
-                .author_id(msg.author.id)
-                .message_id(search_msg.id)
+            let Some(interaction) = serenity::collector::ComponentInteractionCollector::new(ctx)
+                .filter({
+                    let ctx_id = ctx_id.to_string();
+                    move |press| press.data.custom_id.starts_with(&ctx_id)
+                })
+                .timeout(Duration::from_secs(600))
                 .await
             else {
                 search_msg
                     .edit(
-                        &ctx.http,
-                        EditMessage::new().components(vec![Self::disabled_nav_row()]),
+                        ctx,
+                        serenity::EditMessage::new().components(vec![Self::disabled_nav_row()]),
                     )
                     .await?;
                 break;
@@ -312,8 +317,8 @@ impl Tracker {
                         page = new_page;
                         search_msg
                             .edit(
-                                &ctx.http,
-                                EditMessage::new()
+                                ctx,
+                                serenity::EditMessage::new()
                                     .embed(self.build_embed(results, page)?)
                                     .components(vec![Self::enabled_nav_row(page, total_pages)]),
                             )
@@ -335,16 +340,16 @@ impl Tracker {
             page = new_page;
 
             let reply = if page == prev_page {
-                CreateInteractionResponse::Acknowledge
+                serenity::CreateInteractionResponse::Acknowledge
             } else {
-                CreateInteractionResponse::UpdateMessage(
-                    CreateInteractionResponseMessage::new()
+                serenity::CreateInteractionResponse::UpdateMessage(
+                    serenity::CreateInteractionResponseMessage::new()
                         .embed(self.build_embed(results, page)?)
                         .components(vec![Self::enabled_nav_row(page, total_pages)]),
                 )
             };
 
-            interaction.create_response(&ctx.http, reply).await?;
+            interaction.create_response(ctx.http(), reply).await?;
         }
 
         Ok(())

@@ -1,82 +1,106 @@
 mod tracker;
 
-use std::collections::HashMap;
-
-use log::{info};
-use serenity::all::{ChannelId, CreateMessage};
-use serenity::model::channel::Message;
-use serenity::prelude::*;
-use serenity::{all::Ready, async_trait};
-
 use crate::tracker::{Tracker, TrackerConfig};
+use log::{error, info};
+use poise::serenity_prelude as serenity;
+use std::{collections::HashMap, sync::Arc};
 
-pub struct Handler {
-    // keyed by TrackerConfig::name
-    trackers: HashMap<&'static str, Tracker>,
+static TRACKER_CONFIGS: &[TrackerConfig] = &[TrackerConfig {
+    name: "ye",
+    url: "https://yetracker.net/htmlview/sheet?headers=false&gid=34972268",
+}];
+
+#[derive(Debug)]
+pub struct Data {
+    trackers: Arc<HashMap<&'static str, Tracker>>,
 }
 
-impl Handler {
+impl Data {
     pub fn new(trackers: impl IntoIterator<Item = Tracker>) -> Self {
         Self {
-            trackers: trackers.into_iter().map(|t| (t.name, t)).collect(),
+            trackers: Arc::new(trackers.into_iter().map(|t| (t.name, t)).collect()),
         }
     }
 }
 
-// TODO: Poise
-#[async_trait]
-impl EventHandler for Handler {
-    async fn ready(&self, _: Context, event: Ready) {
-        info!("Bot User \"{}\" is now ready.", event.user.display_name())
+pub type Error = Box<dyn std::error::Error + Send + Sync>;
+pub type Context<'a> = poise::Context<'a, Data, Error>;
+
+#[poise::command(slash_command, prefix_command)]
+async fn search(
+    ctx: Context<'_>,
+    #[description = "Search Query"]
+    #[rest]
+    query: String,
+) -> Result<(), Error> {
+    let tracker = ctx.data().trackers.get("ye").unwrap();
+
+    let results = tracker.search(&query);
+
+    if let Err(e) = tracker.send_embed(ctx, &query, &results).await {
+        eprintln!("Pagination error: {e}");
     }
 
-    // TODO: Poise
-    async fn message(&self, ctx: Context, msg: Message) {
-        if let Some(query) = msg.content.strip_prefix("!search ") {
-            let tracker = self.trackers.get("ye").unwrap();
-
-            let results = tracker.search(query);
-
-            if let Err(e) =  tracker.send_embed(&ctx, &msg, query, &results).await {
-                eprintln!("Pagination error: {e}");
-            }
-        }
-    }
+    Ok(())
 }
-
-// Add as many as you need — 'static so they can be referenced from spawned tasks
-static TRACKERS: &[TrackerConfig] = &[
-    TrackerConfig {
-        name: "ye",
-        url: "https://yetracker.net/htmlview/sheet?headers=false&gid=34972268"
-    },
-    //TrackerConfig { name: "other", url: "https://othertracker.net/..." },
-];
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().unwrap();
     pretty_env_logger::init();
+
+    let token = std::env::var("TOKEN").expect("No 'TOKEN' env var found.");
+    let prefix = std::env::var("PREFIX").expect("No 'PREFIX' env var found.");
+
     info!("Tracker bot starting...");
 
     let mut set = tokio::task::JoinSet::new();
-    for config in TRACKERS.iter() {
+    for config in TRACKER_CONFIGS.iter() {
         set.spawn(Tracker::build(config));
     }
 
-    let mut trackers = Vec::with_capacity(TRACKERS.len());
+    let mut trackers = Vec::with_capacity(TRACKER_CONFIGS.len());
     while let Some(res) = set.join_next().await {
-        trackers.push(res.unwrap()?); // outer ? = JoinError (task panicked), inner ? = your anyhow::Result
+        trackers.push(res??);
     }
-    let handler = Handler::new(trackers);
 
-    let token = std::env::var("TOKEN").expect("No 'TOKEN' env var found.");
-    let intents = GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT;
+    let intents =
+        serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
 
-    let mut client = Client::builder(&token, intents)
-        .event_handler(handler)
-        .await?;
+    let framework = poise::Framework::builder()
+        .options(poise::FrameworkOptions {
+            commands: vec![search()],
+            prefix_options: poise::PrefixFrameworkOptions {
+                prefix: Some(prefix),
+                ..Default::default()
+            },
+            on_error: |error| {
+                Box::pin(async move {
+                    match error {
+                        poise::FrameworkError::UnknownCommand { .. } => { /* ignored */ }
+                        other => {
+                            error!("{other:#?}");
+                            poise::builtins::on_error(other).await.unwrap();
+                        }
+                    }
+                })
+            },
+            ..Default::default()
+        })
+        .setup(|ctx, ready, framework| {
+            Box::pin(async move {
+                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                info!("Bot User \"{}\" is now ready.", ready.user.display_name());
+                Ok(Data::new(trackers))
+            })
+        })
+        .build();
 
-    client.start().await?;
+    let client = serenity::ClientBuilder::new(token, intents)
+        .framework(framework)
+        .await;
+
+    client.unwrap().start().await.unwrap();
+
     Ok(())
 }
