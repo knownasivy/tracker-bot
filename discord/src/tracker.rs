@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use anyhow::{Result, anyhow};
 use log::info;
@@ -70,22 +70,27 @@ impl Tracker {
             return Vec::new();
         }
 
-        let query_words: Vec<&str> = normalized.split_whitespace().collect();
+        let query_counts = word_counts(&normalized);
 
         self.index
             .iter()
             .filter(|(name, _)| {
-                let name_words: Vec<&str> = name.split_whitespace().collect();
-                query_words.iter().all(|qw| name_words.contains(qw))
+                let name_counts = word_counts(name);
+
+                query_counts.iter().all(|(word, required)| {
+                    name_counts.get(word).copied().unwrap_or(0) >= *required
+                })
             })
             .map(|(_, i)| {
                 let record = &self.records[*i];
                 let name_raw = record.name.as_ref();
-                let (name_clean, name_extra) = if let Some(s) = name_raw.split_once("\n") {
-                    (s.0, Some(s.1))
-                } else {
-                    (name_raw, None)
-                };
+                let (name_clean, name_extra) =
+                    if let Some((clean, extra)) = name_raw.split_once('\n') {
+                        (clean, Some(extra))
+                    } else {
+                        (name_raw, None)
+                    };
+
                 SearchResult {
                     name_raw,
                     name_clean,
@@ -150,19 +155,19 @@ impl Tracker {
                 .style(serenity::ButtonStyle::Secondary)
                 .disabled(at_first),
             serenity::CreateButton::new(Self::BTN_PREV)
-                .label("Last")
+                .label("Back")
                 .style(serenity::ButtonStyle::Secondary)
                 .disabled(at_first),
             serenity::CreateButton::new(Self::BTN_CHOOSE)
                 .label(format!("{page}/{total_pages}", page = page + 1))
                 .style(serenity::ButtonStyle::Secondary)
                 .disabled(disabled),
-            serenity::CreateButton::new(Self::BTN_LAST)
-                .label("Last")
-                .style(serenity::ButtonStyle::Secondary)
-                .disabled(at_last),
             serenity::CreateButton::new(Self::BTN_NEXT)
                 .label("Next")
+                .style(serenity::ButtonStyle::Secondary)
+                .disabled(at_last),
+            serenity::CreateButton::new(Self::BTN_LAST)
+                .label("Last")
                 .style(serenity::ButtonStyle::Secondary)
                 .disabled(at_last),
         ])
@@ -279,8 +284,6 @@ impl Tracker {
             return Ok(());
         }
 
-        let ctx_id = ctx.id();
-
         let reply = ctx
             .send(
                 poise::CreateReply::default()
@@ -295,10 +298,8 @@ impl Tracker {
 
         loop {
             let Some(interaction) = serenity::collector::ComponentInteractionCollector::new(ctx)
-                .filter({
-                    let ctx_id = ctx_id.to_string();
-                    move |press| press.data.custom_id.starts_with(&ctx_id)
-                })
+                .message_id(search_msg.id)
+                .author_id(ctx.author().id)
                 .timeout(Duration::from_secs(600))
                 .await
             else {
@@ -339,17 +340,20 @@ impl Tracker {
             let prev_page = page;
             page = new_page;
 
-            let reply = if page == prev_page {
-                serenity::CreateInteractionResponse::Acknowledge
-            } else {
-                serenity::CreateInteractionResponse::UpdateMessage(
-                    serenity::CreateInteractionResponseMessage::new()
-                        .embed(self.build_embed(results, page)?)
-                        .components(vec![Self::enabled_nav_row(page, total_pages)]),
-                )
-            };
+            interaction
+                .create_response(ctx.http(), serenity::CreateInteractionResponse::Acknowledge)
+                .await?;
 
-            interaction.create_response(ctx.http(), reply).await?;
+            if page != prev_page {
+                search_msg
+                    .edit(
+                        ctx,
+                        serenity::EditMessage::new()
+                            .embed(self.build_embed(results, page)?)
+                            .components(vec![Self::enabled_nav_row(page, total_pages)]),
+                    )
+                    .await?;
+            }
         }
 
         Ok(())
@@ -522,4 +526,14 @@ fn process_line(line: &str) -> String {
     }
 
     out
+}
+
+fn word_counts(s: &str) -> HashMap<&str, usize> {
+    let mut counts = HashMap::new();
+
+    for word in s.split_whitespace() {
+        *counts.entry(word).or_insert(0) += 1;
+    }
+
+    counts
 }
