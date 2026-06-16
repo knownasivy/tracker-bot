@@ -5,6 +5,31 @@ Caddy
     └─PgBouncer
       └─Postgres
 
+# Project
+main.rs
+app.rs
+db/
+├── mod.rs
+├── postgres.rs
+└── migrations/
+
+# TODO
+* Etags for caching files etc
+* Users like this?
+```rust
+#[derive(Clone)]
+struct CurrentUser {
+    name: String,
+}
+task_local! {
+    pub static USER: CurrentUser;
+}
+```
+
+# Create file with 
+
+* File hashing for deduplication
+
 # Keep allocations LOW (this matters more than anything)
 
 Most Axum "slowdowns" come from String, Vec, cloning, JSON, etc.
