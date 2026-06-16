@@ -1,0 +1,19 @@
+[Unit]
+Description=My Axum App
+After=network.target
+
+[Service]
+User=app
+Group=app
+
+WorkingDirectory=/root/tracker/target/release/website
+
+ExecStart=/root/tracker/website/target/release/website
+
+Restart=always
+RestartSec=5
+
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target
