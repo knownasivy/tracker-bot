@@ -1,10 +1,9 @@
 mod tracker;
 
 use crate::tracker::{Tracker, TrackerConfig};
+use dotenvy::dotenv;
 use log::{error, info};
 use poise::serenity_prelude as serenity;
-#[cfg(debug_assertions)]
-use std::str::FromStr;
 use std::{collections::HashMap, sync::Arc};
 
 static TRACKER_CONFIGS: &[TrackerConfig] = &[TrackerConfig {
@@ -49,7 +48,7 @@ async fn search(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().unwrap();
+    dotenv().ok();
     pretty_env_logger::init();
 
     let token = std::env::var("TOKEN").expect("No 'TOKEN' env var found.");
