@@ -2,7 +2,7 @@ use sqlx::{PgPool, postgres::PgPoolOptions};
 
 use sqlx::migrate::Migrator;
 
-static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
+// static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
 pub async fn create_pool(url: &str) -> anyhow::Result<PgPool> {
     let pool = PgPoolOptions::new()
@@ -11,7 +11,7 @@ pub async fn create_pool(url: &str) -> anyhow::Result<PgPool> {
         .connect(url)
         .await?;
 
-    MIGRATOR.run(&pool).await?;
+//    MIGRATOR.run(&pool).await?;
 
     Ok(pool)
 }
