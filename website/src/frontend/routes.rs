@@ -10,5 +10,7 @@ pub fn router() -> Router<AppState> {
         .route("/", get(home_page))
         .route("/index.html", get(home_page))
         .route("/about", get(about_page))
+        .route("/terms", get(about_page))
+        .route("/privacy", get(about_page))
         .route("/u/{upload_id}", get(file_page))
 }

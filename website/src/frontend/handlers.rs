@@ -262,7 +262,39 @@ pub async fn about_page() -> Markup {
                     h1 { "avafiles" }
                 }
                 div class="card-body" {
-                    p { "A simple, fast audio uploader. Drop in your files and get them hosted instantly." }
+                    p { "about" }
+                }
+            }
+        },
+    )
+}
+
+pub async fn privacy_page() -> Markup {
+    base_layout(
+        "avafiles • privacy",
+        html! {
+            div class="about-card" {
+                div class="card-header" {
+                    h1 { "avafiles" }
+                }
+                div class="card-body" {
+                    p { "privacy" }
+                }
+            }
+        },
+    )
+}
+
+pub async fn terms_page() -> Markup {
+    base_layout(
+        "avafiles • terms",
+        html! {
+            div class="about-card" {
+                div class="card-header" {
+                    h1 { "avafiles" }
+                }
+                div class="card-body" {
+                    p { "terms" }
                 }
             }
         },
