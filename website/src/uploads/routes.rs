@@ -6,14 +6,16 @@ use axum::{
 
 use crate::{
     state::AppState,
-    uploads::handlers::{get_file, upload_file},
+    uploads::handlers::{download_file, upload_file},
 };
+
+const MAX_SIZE: usize = 200 * 1000 * 1000;
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route(
             "/uploads",
-            post(upload_file).layer(DefaultBodyLimit::max(200 * 1000 * 1000)), // 200MB max upload
+            post(upload_file).layer(DefaultBodyLimit::max(MAX_SIZE)), // 200MB max upload
         )
-        .route("/uploads/{id}", get(get_file))
+        .route("/uploads/{upload_id}/download", get(download_file))
 }

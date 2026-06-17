@@ -28,3 +28,6 @@ time = { version = "0.3.49", features = ["serde"] }
 nanoid = "0.5.0"
 blake3 = "1.8.5"
 tower-http = { version = "0.7.0", features = ["fs"] }
+tokio-util = { version = "0.7.18", features = ["io"] }
+headers = "0.4.1"
+urlencoding = "2.1.3"

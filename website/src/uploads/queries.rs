@@ -4,13 +4,13 @@ use uuid::Uuid;
 
 use crate::uploads::models::{FileBlob, FileUpload};
 
-pub async fn find_file_upload(db: &PgPool, id: Uuid) -> Result<Option<FileUpload>, sqlx::Error> {
+pub async fn find_file_upload_by_short_code(db: &PgPool, id: &str) -> Result<Option<FileUpload>, sqlx::Error> {
     let file = sqlx::query_as!(
         FileUpload,
         r#"
         SELECT *
         FROM files
-        WHERE id = $1
+        WHERE upload_id = $1
         "#,
         id
     )
@@ -19,6 +19,16 @@ pub async fn find_file_upload(db: &PgPool, id: Uuid) -> Result<Option<FileUpload
 
     Ok(file)
 }
+
+const ALPHABET: [char; 62] = [
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+    'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
+    'U', 'V', 'W', 'X', 'Y', 'Z',
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
+    'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',
+    'u', 'v', 'w', 'x', 'y', 'z',
+];
 
 pub async fn insert_file_upload(
     pool: &PgPool,
@@ -33,7 +43,7 @@ pub async fn insert_file_upload(
         RETURNING *
         "#,
         Uuid::now_v7(),
-        nanoid!(8),
+        nanoid!(8, &ALPHABET),
         blob_id,
         original_name
     )
@@ -43,7 +53,7 @@ pub async fn insert_file_upload(
     Ok(blob)
 }
 
-pub async fn find_file_blob(db: &PgPool, id: Uuid) -> anyhow::Result<Option<FileBlob>> {
+pub async fn find_file_blob(db: &PgPool, id: Uuid) -> anyhow::Result<FileBlob> {
     let blob = sqlx::query_as!(
         FileBlob,
         r#"
@@ -53,7 +63,7 @@ pub async fn find_file_blob(db: &PgPool, id: Uuid) -> anyhow::Result<Option<File
         "#,
         id
     )
-    .fetch_optional(db)
+    .fetch_one(db)
     .await?;
 
     Ok(blob)

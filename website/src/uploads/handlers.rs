@@ -5,28 +5,31 @@ use crate::{
 };
 use axum::{
     Json,
+    body::Body,
     extract::{Multipart, Path, State},
+    http::{HeaderMap, Response, StatusCode},
 };
 use blake3::Hasher;
 use time::OffsetDateTime;
 
 use std::path;
-use tokio::fs;
+use tokio::fs::{self, File};
 use tokio::io::{self, AsyncWriteExt};
+use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
-pub async fn get_file(
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
-) -> Result<Json<FileResponse>, ApiError> {
-    let file = queries::find_file_upload(&state.db, id).await?;
+// pub async fn get_file(
+//     State(state): State<AppState>,
+//     Path(id): Path<Uuid>,
+// ) -> Result<Json<FileResponse>, ApiError> {
+//     let file = queries::find_file_upload(&state.db, id).await?;
 
-    if let Some(f) = file {
-        return Ok(Json(f.into()));
-    }
+//     if let Some(f) = file {
+//         return Ok(Json(f.into()));
+//     }
 
-    Err(ApiError::NotFound)
-}
+//     Err(ApiError::NotFound)
+// }
 
 pub async fn upload_file(
     State(state): State<AppState>,
@@ -62,7 +65,11 @@ pub async fn upload_file(
         );
 
         // TODO: Store full path from the relative path.
-        let new_path = format!("{path}/{date}/{uuid}", path = state.upload_path, uuid = Uuid::now_v7());
+        let new_path = format!(
+            "{path}/{date}/{uuid}",
+            path = state.upload_path,
+            uuid = Uuid::now_v7()
+        );
 
         tracing::info!("new file: {}", new_path.clone());
 
@@ -81,6 +88,52 @@ pub async fn upload_file(
     }
 
     Err(ApiError::NoFile)
+}
+
+pub async fn download_file(
+    State(state): State<AppState>,
+    Path(upload_id): Path<String>,
+) -> Result<Response<Body>, ApiError> {
+    let Some(file) = queries::find_file_upload_by_short_code(&state.db, &upload_id).await? else {
+        return Err(ApiError::NotFound);
+    };
+
+    let blob = queries::find_file_blob(&state.db, file.blob_id).await?;
+    let download = File::open(&blob.file_path)
+        .await
+        .map_err(|_| ApiError::NotFound)?;
+
+    let metadata = download
+        .metadata()
+        .await
+        .map_err(|_| anyhow::anyhow!("Could not fetch file metadata of {}", blob.file_path))?;
+
+    let stream = ReaderStream::new(download);
+
+    let mut headers = HeaderMap::new();
+
+    // TODO: Corrent mime
+    headers.insert("Content-Type", "application/octet-stream".parse().unwrap());
+    headers.insert(
+        "Content-Length",
+        metadata.len().to_string().parse().unwrap(),
+    );
+    headers.insert(
+        "Content-Disposition",
+        format!(
+            "attachment; filename*=UTF-8''{}",
+            urlencoding::encode(&file.original_name)
+        )
+        .parse()
+        .unwrap(),
+    );
+
+    let mut response = Response::new(Body::from_stream(stream));
+
+    *response.status_mut() = StatusCode::OK;
+    response.headers_mut().extend(headers);
+
+    Ok(response)
 }
 
 pub async fn move_file<P: AsRef<path::Path>, Q: AsRef<path::Path>>(
