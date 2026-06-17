@@ -21,9 +21,10 @@ sqlx = { version = "0.8", features = [
     "time",
     "derive"
 ] }
-maud = "0.27.0"
+maud = { version = "0.27.0", features = ["axum"] }
 anyhow = "1.0.102"
 sanitize-filename = "0.6.0"
 time = { version = "0.3.49", features = ["serde"] }
 nanoid = "0.5.0"
 blake3 = "1.8.5"
+tower-http = { version = "0.7.0", features = ["fs"] }

@@ -62,7 +62,7 @@ pub async fn upload_file(
         );
 
         // TODO: Store full path from the relative path.
-        let new_path = format!("{path}/{date}/{file_name}", path = state.upload_path);
+        let new_path = format!("{path}/{date}/{uuid}", path = state.upload_path, uuid = Uuid::now_v7());
 
         tracing::info!("new file: {}", new_path.clone());
 

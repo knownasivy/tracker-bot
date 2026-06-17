@@ -36,15 +36,13 @@ impl FileUpload {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct FileResponse {
-    pub id: Uuid,
-    pub file_name: String,
+    pub upload_id: String,
 }
 
 impl From<FileUpload> for FileResponse {
     fn from(file: FileUpload) -> Self {
         Self {
-            id: file.id,
-            file_name: file.original_name,
+            upload_id: file.upload_id,
         }
     }
 }
