@@ -24,6 +24,7 @@ pub struct FileUpload {
     pub blob_id: Uuid,
     pub original_name: String,
     pub created_at: OffsetDateTime,
+    pub size: i64,
 }
 
 impl FileUpload {

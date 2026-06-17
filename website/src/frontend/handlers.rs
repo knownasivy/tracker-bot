@@ -1,4 +1,6 @@
-use maud::{DOCTYPE, Markup, PreEscaped, html};
+use crate::{error::ApiError, state::AppState, uploads::queries};
+use axum::extract::{Path, State};
+use maud::{DOCTYPE, Markup, html};
 
 pub fn base_layout(title: &str, content: Markup) -> Markup {
     html! {
@@ -12,25 +14,15 @@ pub fn base_layout(title: &str, content: Markup) -> Markup {
                 link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin";
                 link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet";
                 link rel="stylesheet" href="/static/style.css";
-                script src="/static/upload.js" defer="defer" {}
             }
             body {
                 header class="site-header" {
                     div class="header-container" {
                         a href="/" class="logo" {
-                            svg
-                                width="20"
-                                height="20"
-                                viewBox="0 0 512 512"
-                                fill="currentColor"
-                                aria-hidden="true"
-                            {
-                                path d="M372.87,33.391c-46.903,0-90.88,23.598-116.87,62.152c-25.99-38.555-69.967-62.152-116.87-62.152C62.413,33.391,0,95.804,0,172.522c0,37.935,14.164,73.011,39.88,98.76l200.38,200.804c4.207,4.207,9.794,6.522,15.74,6.522s11.532-2.315,15.74-6.521l200.314-200.772C497.815,245.522,512,210.435,512,172.522C512,95.804,449.587,33.391,372.87,33.391z" {}
-                            }
                             span { "avafiles" }
                         }
                         nav class="nav-links" {
-                            a href="/about" { "About" }
+                            a href="/about" { "about" }
                         }
                     }
                 }
@@ -57,6 +49,7 @@ pub async fn home_page() -> Markup {
     base_layout(
         "avafiles",
         html! {
+            script src="/static/upload.js" defer="defer" {}
             div class="upload-page" {
                 h1 class="page-title" { "avafiles" }
                 p class="page-subtitle" { "Upload and share audio files" }
@@ -83,6 +76,183 @@ pub async fn home_page() -> Markup {
             }
         },
     )
+}
+
+fn is_audio_file(name: &str) -> bool {
+    match name.rsplit('.').next().map(|s| s.to_ascii_lowercase()) {
+        Some(ext) => matches!(
+            ext.as_str(),
+            "mp3" | "wav" | "flac" | "m4a" | "aac" | "ogg" | "opus"
+        ),
+        None => false,
+    }
+}
+
+pub async fn file_page(
+    State(state): State<AppState>,
+    Path(upload_id): Path<String>,
+) -> Result<Markup, ApiError> {
+    let Some(file) = queries::find_file_upload_by_short_code(&state.db, &upload_id).await? else {
+        return Err(ApiError::NotFound);
+    };
+
+    // Helper: format bytes to human readable
+    fn format_file_size(bytes: i64) -> String {
+        if bytes == 0 {
+            return "0 Bytes".into();
+        }
+        let k = 1024.0_f64;
+        let sizes = ["Bytes", "KB", "MB", "GB"];
+        let i = ((bytes as f64).ln() / k.ln()) as usize;
+        let i = i.min(sizes.len() - 1);
+        format!("{:.2} {}", (bytes as f64) / k.powi(i as i32), sizes[i])
+    }
+
+    fn format_date(dt: time::OffsetDateTime) -> String {
+        format!(
+            "{month:02}/{day:02}/{year}",
+            year = dt.year(),
+            month = dt.month() as u8,
+            day = dt.day()
+        )
+    }
+
+    let download_url = format!("/api/uploads/{upload_id}/download");
+    let is_audio = is_audio_file(&file.original_name);
+
+    let page = if is_audio {
+        let file_size = format_file_size(file.size);
+        let created_at = format_date(file.created_at);
+
+        html! {
+                div class="audio-page" {
+                    div class="audio-card" {
+                        div class="cover-art" {
+                            svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" {
+                                path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" {}
+                            }
+                        }
+
+                        div class="audio-info" {
+                            span class="audio-meta-item" { (created_at) }
+                            span class="audio-meta-sep" { "·" }
+                            span class="audio-meta-item" { (file_size) }
+                            // span class="audio-meta-sep" { "·" }
+                            // span class="audio-meta-item" { "320 kbps" }
+                        }
+
+                        div class="audio-header" {
+                            h2 class="audio-title" { (file.original_name) }
+                            a class="download-btn"
+                                href=(download_url)
+                                download=(file.original_name)
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Download" {
+                                svg class="download-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" {
+                                    path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" {}
+                                }
+                            }
+                        }
+
+                        audio
+                            id="audio-player"
+                            preload="metadata"
+                            src=(download_url.as_str())
+                            style="display: none;"
+                        {}
+
+                        div class="controls-row" {
+                            button id="play-button"
+                                    type="button"
+                                    class="play-btn"
+                                    aria-label="Play" {
+                                svg id="play-icon" class="play-icon" fill="currentColor" viewBox="0 0 24 24" {
+                                    path d="M8 5v14l11-7z" {}
+                                }
+                                svg id="pause-icon" class="pause-icon hidden" fill="currentColor" viewBox="0 0 24 24" {
+                                    path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" {}
+                                }
+                            }
+
+                            span id="current-time" class="time-display" { "0:00" }
+
+                            div class="seek-container" {
+                                div class="seek-track" {}
+                                div id="seek-progress" class="seek-fill" style="width: 0%;" {}
+                                input id="seek-bar"
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value="0"
+                                    class="seek-input";
+                            }
+
+                            span id="duration" class="time-display" { "0:00" }
+
+                            div class="volume-container" {
+                                button id="volume-button"
+                                        type="button"
+                                        class="volume-btn"
+                                        aria-label="Volume" {
+                                    svg fill="none" stroke="currentColor" viewBox="0 0 24 24" {
+                                        path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" {}
+                                    }
+                                }
+                                div id="volume-popup" class="volume-popup hidden" {
+                                    div class="volume-slider-wrap" {
+                                        div id="volume-progress" class="volume-fill" {}
+                                        input id="volume-slider"
+                                              type="range"
+                                              min="0"
+                                              max="1"
+                                              step="0.01"
+                                              value="1"
+                                              class="volume-input";
+                                        div id="volume-thumb" class="volume-thumb" {}
+                                    }
+                                }
+                            }
+
+                            span id="duration" class="time-display" { "0:00" }
+                        }
+                    }
+                }
+
+                script src="/static/audioplayer.js" {}
+        }
+    } else {
+        let file_size = format_file_size(file.size);
+        html! {
+            div class="audio-page" {
+                div class="audio-card file-card-layout" {
+                    div class="file-icon-box" {
+                        svg class="file-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" {
+                            path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" {}
+                        }
+                    }
+                    div class="audio-main" {
+                        h2 class="audio-title" { (file.original_name) }
+                        div class="audio-meta" {
+                            span { (file_size) }
+                        }
+                        a class="small-btn" href=(download_url) download=(file.original_name) {
+                            "Download"
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    Ok(base_layout(
+        &format!("avafiles • {}", file.original_name),
+        page,
+    ))
 }
 
 pub async fn about_page() -> Markup {

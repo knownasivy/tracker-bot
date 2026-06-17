@@ -34,18 +34,20 @@ pub async fn insert_file_upload(
     pool: &PgPool,
     blob_id: Uuid,
     original_name: &str,
+    size: i64,
 ) -> anyhow::Result<FileUpload> {
     let blob = sqlx::query_as!(
         FileUpload,
         r#"
-        INSERT INTO files (id, upload_id, blob_id, original_name)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO files (id, upload_id, blob_id, original_name, size)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING *
         "#,
         Uuid::now_v7(),
         nanoid!(8, &ALPHABET),
         blob_id,
-        original_name
+        original_name,
+        size
     )
     .fetch_one(pool)
     .await?;

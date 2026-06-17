@@ -10,7 +10,8 @@ CREATE TABLE files (
     upload_id TEXT NOT NULL UNIQUE,
     blob_id UUID NOT NULL REFERENCES file_blobs(id) ON DELETE RESTRICT,
     original_name TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp
+    created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    size BIGINT NOT NULL
 );
 
 CREATE INDEX idx_files_blob_id ON files(blob_id);

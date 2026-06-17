@@ -69,7 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function renderUploads() {
         uploadsList.innerHTML = sessionUploads.map(item => `
-            <a class="upload-item" href="/f/${item.upload_id}" target="_blank" rel="noopener noreferrer">
+            <a class="upload-item" href="/u/${item.upload_id}" target="_blank" rel="noopener noreferrer">
                 <span class="upload-item-link">${escapeHtml(item.name)}</span>
                 <span class="upload-item-meta">${item.sizeText}</span>
             </a>

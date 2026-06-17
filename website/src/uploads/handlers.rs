@@ -7,15 +7,19 @@ use axum::{
     Json,
     body::Body,
     extract::{Multipart, Path, State},
-    http::{HeaderMap, Response, StatusCode},
+    http::{
+        HeaderValue, Request,
+        header::{CONTENT_DISPOSITION, CONTENT_TYPE},
+    },
+    response::Response,
 };
 use blake3::Hasher;
-use time::OffsetDateTime;
-
 use std::path;
-use tokio::fs::{self, File};
+use time::OffsetDateTime;
+use tokio::fs;
 use tokio::io::{self, AsyncWriteExt};
-use tokio_util::io::ReaderStream;
+use tower::ServiceExt;
+use tower_http::services::ServeFile;
 use uuid::Uuid;
 
 // pub async fn get_file(
@@ -71,18 +75,18 @@ pub async fn upload_file(
             uuid = Uuid::now_v7()
         );
 
-        tracing::info!("new file: {}", new_path.clone());
-
         let (blob_id, inserted) =
             queries::insert_file_blob(&state.db, &new_path, &hash, size).await?;
 
         if inserted {
-            move_file(temp_file, new_path).await?;
+            move_file(temp_file, new_path.clone()).await?;
+
+            tracing::info!("new file: {}", new_path);
         } else {
             fs::remove_file(temp_file).await?;
         }
 
-        let file = queries::insert_file_upload(&state.db, blob_id, &file_name).await?;
+        let file = queries::insert_file_upload(&state.db, blob_id, &file_name, size).await?;
 
         return Ok(Json(file.into()));
     }
@@ -93,48 +97,73 @@ pub async fn upload_file(
 pub async fn download_file(
     State(state): State<AppState>,
     Path(upload_id): Path<String>,
+    request: Request<Body>,
 ) -> Result<Response<Body>, ApiError> {
     let Some(file) = queries::find_file_upload_by_short_code(&state.db, &upload_id).await? else {
         return Err(ApiError::NotFound);
     };
 
     let blob = queries::find_file_blob(&state.db, file.blob_id).await?;
-    let download = File::open(&blob.file_path)
+
+    let mut response = ServeFile::new(&blob.file_path)
+        .oneshot(request)
         .await
-        .map_err(|_| ApiError::NotFound)?;
+        .map_err(|e| anyhow::anyhow!("Failed to serve file: {e}"))?
+        .map(axum::body::Body::new);
 
-    let metadata = download
-        .metadata()
-        .await
-        .map_err(|_| anyhow::anyhow!("Could not fetch file metadata of {}", blob.file_path))?;
-
-    let stream = ReaderStream::new(download);
-
-    let mut headers = HeaderMap::new();
-
-    // TODO: Corrent mime
-    headers.insert("Content-Type", "application/octet-stream".parse().unwrap());
-    headers.insert(
-        "Content-Length",
-        metadata.len().to_string().parse().unwrap(),
-    );
-    headers.insert(
-        "Content-Disposition",
-        format!(
+    response.headers_mut().insert(
+        CONTENT_DISPOSITION,
+        HeaderValue::from_str(&format!(
             "attachment; filename*=UTF-8''{}",
             urlencoding::encode(&file.original_name)
-        )
-        .parse()
+        ))
         .unwrap(),
     );
 
-    let mut response = Response::new(Body::from_stream(stream));
-
-    *response.status_mut() = StatusCode::OK;
-    response.headers_mut().extend(headers);
+    // Optional if you want browser sniffing instead.
+    response.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
 
     Ok(response)
 }
+
+// TODO: preview
+// pub async fn download_file(
+//     State(state): State<AppState>,
+//     Path(upload_id): Path<String>,
+//     request: Request<Body>,
+// ) -> Result<Response<Body>, ApiError> {
+//     let Some(file) = queries::find_file_upload_by_short_code(&state.db, &upload_id).await? else {
+//         return Err(ApiError::NotFound);
+//     };
+
+//     let blob = queries::find_file_blob(&state.db, file.blob_id).await?;
+
+//     let mut response = ServeFile::new(&blob.file_path)
+//         .oneshot(request)
+//         .await
+//         .map_err(|e| anyhow::anyhow!("Failed to serve file: {e}"))?
+//         .map(axum::body::Body::new);
+
+//     response.headers_mut().insert(
+//         CONTENT_DISPOSITION,
+//         HeaderValue::from_str(&format!(
+//             "attachment; filename*=UTF-8''{}",
+//             urlencoding::encode(&file.original_name)
+//         ))
+//         .unwrap(),
+//     );
+
+//     // Optional if you want browser sniffing instead.
+//     response.headers_mut().insert(
+//         CONTENT_TYPE,
+//         HeaderValue::from_static("application/octet-stream"),
+//     );
+
+//     Ok(response)
+// }
 
 pub async fn move_file<P: AsRef<path::Path>, Q: AsRef<path::Path>>(
     from: P,

@@ -320,7 +320,6 @@ a {
     color: var(--accent-strong);
 }
 
-
 .upload-item-meta {
     flex-shrink: 0;
     font-size: 12px;
@@ -384,7 +383,6 @@ a {
     font-variant-numeric: tabular-nums;
 }
 
-
 .card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -429,4 +427,303 @@ a {
     color: var(--text-1);
     border-color: rgba(212, 127, 166, 0.5);
     background: rgba(212, 127, 166, 0.03);
+}
+
+.audio-page {
+    width: 100%;
+    max-width: 560px;
+    margin: 0 auto;
+}
+
+.audio-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 24px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.cover-art {
+    width: 224px;
+    height: 224px;
+    border-radius: 16px;
+    background: #1c1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    color: var(--text-2);
+}
+.cover-art svg {
+    width: 80px;
+    height: 80px;
+}
+
+.audio-info,
+.audio-info .audio-meta-item,
+.audio-info .audio-meta-sep,
+.time-display,
+.audio-title,
+.cover-art span,
+.file-icon-box span {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-kerning: normal;
+}
+
+.audio-info {
+    line-height: 1.4;
+    font-weight: 500;
+}
+
+.time-display {
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.audio-title {
+    letter-spacing: -0.01em;
+    font-weight: 600;
+}
+
+.audio-info {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    font-size: 13px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+.audio-meta-sep {
+    opacity: 0.5;
+}
+
+.audio-header {
+    padding-left: 8px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    /*gap: 8px;*/
+    margin-bottom: -6px;
+}
+
+.audio-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+.download-btn {
+    flex-shrink: 0;
+    color: var(--muted);
+    padding: 6px;
+    border-radius: 50%;
+    transition:
+        color 0.12s,
+        background 0.12s;
+}
+.download-btn:hover {
+    color: var(--text-1);
+    background: rgba(255, 255, 255, 0.04);
+}
+.download-icon {
+    width: 22px;
+    height: 22px;
+    stroke: currentColor;
+}
+
+.controls-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: -4px;
+}
+
+.time-display {
+    width: 36px;
+    font-size: 13px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.play-btn {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--text-1);
+    padding: 4px;
+    border-radius: 50%;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition:
+        transform 0.08s,
+        color 0.12s;
+}
+.play-btn:hover {
+    transform: scale(1.05);
+    color: var(--accent);
+}
+.play-icon,
+.pause-icon {
+    width: 20px;
+    height: 20px;
+}
+
+.seek-container {
+    flex: 1;
+    height: 24px;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.seek-track {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.15);
+    pointer-events: none;
+}
+
+.seek-fill {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 4px;
+    border-radius: 2px;
+    background: var(--text-1);
+    pointer-events: none;
+    width: 0px;
+}
+
+.seek-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.volume-container {
+    position: relative;
+    flex-shrink: 0;
+}
+.volume-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: color 0.12s;
+}
+
+.volume-btn:hover {
+    color: var(--text-1);
+}
+
+.volume-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.volume-popup {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    background: #1e1c1c;
+    border: 1px solid var(--border);
+    padding: 12px 8px;
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+}
+
+.volume-slider-wrap {
+    width: 8px;
+    height: 90px;
+    position: relative;
+    margin: 0 auto;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+}
+
+.volume-fill {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+
+    width: 100%;
+    height: 100%;
+
+    background: var(--text-1);
+    border-radius: 999px;
+
+    pointer-events: none;
+}
+
+.volume-input {
+    position: absolute;
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+
+    margin: 0;
+
+    opacity: 0;
+    cursor: pointer;
+
+    writing-mode: vertical-lr;
+    direction: rtl;
+}
+
+.volume-thumb {
+    position: absolute;
+    left: 50%;
+
+    width: 10px;
+    height: 10px;
+
+    background: var(--text-1);
+    border-radius: 50%;
+
+    border: 1px solid rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+
+    pointer-events: none;
+
+    transform: translateX(-50%);
+}
+
+.hidden {
+    display: none !important;
 }
