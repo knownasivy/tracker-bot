@@ -8,9 +8,8 @@ axum = { version = "0.8.9", features = ["macros", "multipart"] }
 tokio = { version = "1.52", features = ["full"] }
 tower = "0.5.3"
 tracing = "0.1.44"
-log = "0.4"
 dotenvy = "0.15.7"
-pretty_env_logger = "0.5.0"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1", features = ["derive"] }
 uuid = { version = "1", features = ["serde", "v7"] }
 sqlx = { version = "0.8", features = [
@@ -19,9 +18,12 @@ sqlx = { version = "0.8", features = [
     "macros",
     "migrate",
     "uuid",
-    "chrono"
+    "time",
+    "derive"
 ] }
-
 maud = "0.27.0"
 anyhow = "1.0.102"
 sanitize-filename = "0.6.0"
+time = { version = "0.3.49", features = ["serde"] }
+nanoid = "0.5.0"
+blake3 = "1.8.5"

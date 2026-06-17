@@ -11,7 +11,7 @@ pub mod uploads;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
-    pretty_env_logger::init();
+    tracing_subscriber::fmt::init();
 
     // build our application with a single route
     let state = state::AppState::new().await?;
